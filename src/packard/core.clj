@@ -3,8 +3,10 @@
     [clojure.string :as str]))
 
 (defn- flag? [s]
-  (or (str/starts-with? s "-")
-      (str/starts-with? s "--")))
+  (if-not s
+    false
+    (or (str/starts-with? s "-")
+        (str/starts-with? s "--"))))
 
 (defn- source-flag [a]
   (let [[f v] a]
@@ -13,8 +15,8 @@
         [f vv])
       [f v])))
 
-(defn- take-arg-value [argv flag]
-  (let [a (drop-while #(not (str/includes? % flag)) argv)]
+(defn- take-str-flag [flag argv]
+  (let [a (drop-while #(not (str/starts-with? % flag)) argv)]
     (if (< (count a) 1)
       nil
       (let [[f v] (source-flag a)]
@@ -22,40 +24,115 @@
           (throw (ex-info "missing flag arg" {:flag f}))
           v)))))
 
-(defn- take-flag* [s l arg-vec]
-  (let [sv (take-arg-value arg-vec (str "-" s))
-        lv (take-arg-value arg-vec (str "--" l))]
-    (or sv lv nil)))
+(defn- prune-argv [flag argv]
+  (let [a (drop-while #(not (str/starts-with? % flag)) argv)]
+    (if (< (count a) 1)
+      []
+      (let [[f _] a]
+        (if (str/includes? f "=")
+          (drop 1 a)
+          (drop 2 a))))))
 
-(defn- take-flag [flag-spec arg-vec]
-  (let [s  (:short flag-spec)
-        l  (:long flag-spec)
-        c  (or (:conv flag-spec) identity)
-        r? (or (:required? flag-spec) false)
-        v  (take-flag* s l arg-vec)]
-    (when (and r? (not v))
-      (throw (ex-info "required-flag-missing" {:cause [s l]})))
-    (c v)))
+(defn- take-vec-flag
+  ([flag argv]
+   (take-vec-flag flag argv []))
+  ([flag argv result]
+   (if-not (seq argv)
+     result
+     (let [flag-value (take-str-flag flag argv)]
+       (recur flag
+              (prune-argv flag argv)
+              (cond-> result
+                flag-value (conj flag-value)))))))
 
-(defn- assoc-flag [flags flag-spec value]
-  (let [s (:short flag-spec)
-        l (:long  flag-spec)]
-    (cond-> flags
-      s (assoc s value)
-      l (assoc l value))))
+(defn- take-bool-flag [flag argv]
+  (if-not (seq (drop-while #(not= % flag) argv))
+    nil ; bool flag is missing
+    true)) ; bool flag is present)))
+
+(defn- gather-str-flag [spec argv]
+  (let [{:keys [s l required? conv default]
+         :or   {required? false
+                conv      identity
+                default   false}} spec
+        s  (take-str-flag (str "-" s) argv)
+        l  (take-str-flag (str "--" l) argv)
+        v  (or s l default)]
+    (when (and required? (nil? s) (nil? l))
+      (throw (ex-info "missing argument" {:flag {:s s :l l}})))
+    (conv v)))
+
+(defn- gather-bool-flag [spec argv]
+  (let [{:keys [s l required? conv default]
+         :or   {required? false
+                conv      identity}} spec
+         s        (take-bool-flag (str "-" s) argv)
+         l        (take-bool-flag (str "--" l) argv)
+         present? (or s l)]
+    (when (and required? (nil? s) (nil? l))
+      (throw (ex-info "missing bool flag" {:flag {:s s :l l}})))
+    (conv
+      (if present?
+        (not default)
+        default))))
+
+(defn- gather-vec-flag [spec argv]
+  (let [{:keys [s l required? conv]
+         :or   {required? false
+                conv      identity}} spec
+        sv (take-vec-flag (str "-" s) argv)
+        lv (take-vec-flag (str "--" s) argv)
+        vv (into [] (concat (or sv []) (or lv [])))]
+    (when (and required? (empty? vv))
+      (throw (ex-info "missing arguments" {:flag {:s s :l l}})))
+    (conv vv)))
+
+(defn- gather-set-flag [spec argv]
+  (into #{} (gather-vec-flag spec argv)))
+
+(defn- gather-int-flag [spec argv]
+  (Integer. (gather-str-flag spec argv)))
+
+(defn- take-flag [flag-spec argv]
+  (let [kind (get flag-spec :as :str)]
+    (case kind
+      :vec (gather-vec-flag flag-spec argv)
+      :set (gather-set-flag flag-spec argv)
+      :int (gather-int-flag flag-spec argv)
+      :bool (gather-bool-flag flag-spec argv)
+      (gather-str-flag flag-spec argv))))
+
+(defn- flag-map-w-opts [s l desc & {:as opts}]
+  (cond-> {}
+    s    (assoc :s (str s))
+    l    (assoc :l (str l))
+    desc (assoc :desc desc)
+    opts (merge opts)))
+
+(defn- flag-vec->flag-map
+  [k v]
+  (case (count v)
+    0 (flag-map-w-opts (name k)  nil       nil)
+    1 (flag-map-w-opts (nth v 0) nil       nil)
+    2 (flag-map-w-opts (nth v 0) nil       (nth v 1))
+    3 (flag-map-w-opts (nth v 0) (nth v 1) (nth v 2))
+    (apply flag-map-w-opts v)))
 
 (defn- gather-flags
   ([cli-spec arg-vec]
    (gather-flags {} cli-spec arg-vec))
   ([parsed cli-spec arg-vec]
-   (let [f (or (:flags cli-spec) [])]
+   (let [f (or (:flags cli-spec) {})]
      (if-not (seq f)
        parsed
-       (let [[flag-spec & flags]  (:flags cli-spec)
-             [flag-value argv] (take-flag flag-spec arg-vec)]
-         (recur (assoc-flag parsed flag-spec flag-value)
-                (assoc cli-spec :flags flags)
-                argv))))))
+       (let [oflags               (into (sorted-map) f)
+             [flag-key flag-spec] (first oflags)
+             rest-flags           (rest oflags)
+             flag-spec            (flag-vec->flag-map flag-key flag-spec)
+             flag-value           (take-flag flag-spec arg-vec)]
+         (recur (assoc parsed flag-key flag-value)
+                (assoc cli-spec :flags rest-flags)
+                arg-vec))))))
 
 (defn- eq-flag? [s]
   (and (flag? s)
@@ -81,7 +158,8 @@
   (mapv #(format "\t%s\n" (nth % 0)) (:commands c)))
 
 (defn cli-spec->flags [c]
-  (mapv #(format "\t%s,%s\t\t%s\n" (:short %) (:long %) (:desc %)) (:flags c)))
+  (->> (mapv (fn [[k v]] (flag-vec->flag-map k v)) (:flags c))
+       (mapv #(format "\t-%s,--%s\t\t%s\n" (:s %) (:l %) (:desc %)))))
 
 (defn cli-help-msg
   [cli-spec]

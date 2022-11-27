@@ -22,24 +22,22 @@ a simple data driven cli commander
     :run  (fn []
             (println "PONG"))}})
 
-(defn root-cli [_]
-  (println "in root!"))
+(defn root-cli [{:keys [flags]}]
+  (if (:version flags)
+    (println "version: v0.1.0")
+    (System/exit 0)))
 
 (def cli
-  {:usage "cli [command]"
-   :desc  "test cli app for packard"
-   :flags [{:short "v"
-            :long  "version"
-            :desc  "shows cli version"
-            :default "v0.1.0"}]
-   :run   root-cli
+  {:usage     "cli [command]"
+   :desc      "test cli app for packard"
+   :flags     {:version ["v" "version" "cli version" :as :bool]}
+   :run       root-cli
    :commands (merge greet
                     ping)})
-
 
 (defn -main [& _]
   (commander/exec cli *command-line-args*))
 ```
-
-
 The above automatically adds "help" to each sub command.
+
+A more flushed out example is in `test/cli/core.clj`.
