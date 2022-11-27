@@ -109,7 +109,7 @@
 
 (defn exec
   ([cli-spec args]
-   (let [argv (str/split args #" ")]
+   (let [argv (if (string? args) (str/split args #" ") args)]
      (exec {} cli-spec (strip-all-flags argv) argv)))
   ([ctx cli-spec positional argv]
    (let [{:keys [args run commands]
