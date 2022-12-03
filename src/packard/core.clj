@@ -162,24 +162,27 @@
        (mapv #(format "\t-%s,--%s\t\t%s\n" (:s %) (:l %) (:desc %)))))
 
 (defn cli-help-msg
-  [cli-spec]
-  (if-not (:parent cli-spec)
-    (apply str
-      (cond-> []
-        (:usage cli-spec)
-          (concat ["usage:       " (:usage cli-spec) "\n"])
-        (:desc cli-spec)
-          (concat ["\ndescription: " (:desc cli-spec) "\n\n"])
-        (:commands cli-spec)
-          (concat ["commands:\n"]
-                  (cli-spec->commands cli-spec)
-                  ["\n"])
-        (:flags cli-spec)
-          (concat ["\nflags:\n"])
-        (:flags cli-spec)
-          (concat (cli-spec->flags cli-spec)
-                  ["\n"])))
-    (recur (update (:parent cli-spec) :flags concat (:flags cli-spec)))))
+  ([cli-spec]
+   (cli-help-msg cli-spec cli-spec))
+  ([cli-spec leaf-spec]
+   (if-not (:parent cli-spec)
+     (apply str
+       (cond-> []
+         (:usage leaf-spec)
+           (concat ["usage:       " (:usage leaf-spec) "\n"])
+         (:desc leaf-spec)
+           (concat ["\ndescription: " (:desc leaf-spec) "\n\n"])
+         (:commands leaf-spec)
+           (concat ["commands:\n"]
+                   (cli-spec->commands leaf-spec)
+                   ["\n"])
+         (:flags cli-spec)
+           (concat ["\nflags:\n"])
+         (:flags cli-spec)
+           (concat (cli-spec->flags cli-spec)
+                   ["\n"])))
+     (recur (update (:parent cli-spec) :flags concat (:flags cli-spec))
+            leaf-spec))))
 
 (defn- print-help [cli-spec]
   (fn [_]
@@ -196,10 +199,13 @@
          ; auto include help subcommand
          flags   (gather-flags cli-spec argv)
          ctx     (->context ctx flags (vec positional))
-         scmds   (merge commands {"help" {:run (print-help cli-spec)}})]
+         scmds   (merge commands {"help" {:run (print-help cli-spec)}})
+         help?   (= "help" (first positional))]
      (when-not (args positional)
        (throw (ex-info "invalid positional" {:cause positional})))
-     (when run
+     ; ensure the sub-command which specifies help doesn't run
+     ; its handler function.
+     (when (and run (not help?))
        (run ctx))
      (when (and (first positional)
                 (get scmds (first positional)))
