@@ -1,4 +1,4 @@
-(ns cli.core
+(ns kitchen-sink.core
   (:gen-class)
   (:require
     [clojure.string :as str]

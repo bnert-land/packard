@@ -1,3 +1,8 @@
 .lsp/
 .cpcache/
 .clj-kondo/.cache
+
+# Build output
+classes/
+target/
+*.build_artifacts.txt

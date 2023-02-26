@@ -1,1 +1,30 @@
-{:paths ["src/" "test/"]}
+{:paths   ["classes" "src"]
+ :deps    {org.clojure/clojure {:mvn/version "1.11.1"}
+           org.clojure/core.match {:mvn/version "1.0.1"}}
+ :aliases {:nrepl
+           {:extra-deps  {nrepl/nrepl {:mvn/version "1.0.0"}}
+            ; doesn't support extra namespaces right now.
+            :extra-paths ["dev"]
+            :main-opts   ["-m" "nrepl.cmdline"
+                          "-i"
+                          "-b" "0.0.0.0"
+                          "-p" "9099"]}
+           :package
+           {:extra-deps  {uberdeps/uberdeps {:mvn/version "1.2.0"}}
+            :extra-paths ["package"]}
+           :example-httpie
+           {:extra-deps  {cheshire/cheshire {:mvn/version "5.11.0"}
+                          clj-http/clj-http {:mvn/version "3.12.3"}}
+            :extra-paths ["examples"]
+            #_#_:main-opts   ["-m" "httpie.core"]}
+           :test
+           {:extra-deps  {lambdaisland/kaocha {:mvn/version "1.78.1249"}}
+            :extra-paths ["test"]
+            :main-opts   ["-m" "kaocha.runner"]}
+           :outdated
+           {:extra-deps {olical/depot {:mvn/version "2.3.0"}}
+            :main-opts  ["-m" "depot.outdated.main" "-a" "outdated"]}
+           :uberjar        {:replace-deps {uberdeps/uberdeps {:mvn/version "1.2.0"}}
+            :replace-paths []
+            :main-opts     ["-m" "uberdeps.uberjar"]}}}
+
