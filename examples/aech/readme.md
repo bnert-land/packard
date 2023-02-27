@@ -2,7 +2,7 @@
 
 Example `GET` request to httpbin:
 ```bash
-$ clj -M:aech GET https://httpbin.org/get -q msg:echo -h accept:application/quer
+$ clj -M:aech GET https://httpbin.org/get -q msg:echo -h accept:application/json
 ```
 
 Example `POST` request to httpbin:
