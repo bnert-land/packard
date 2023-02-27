@@ -35,7 +35,7 @@
       ;; should this throw?
       (when (and (seq commands) (not next-command?))
         (throw (ex-info "unrecognized command"
-                        {:cause (format "unrecognized command: '%s'" (first argv'))})))
+                        {:cause (format "'%s' is not a command" (first argv'))})))
       (when next-command?
         (if-not (conformed? conformed)
           (throw (ex-info "shouldn't happen" {}))
@@ -67,7 +67,7 @@
          (binding [*out* *err*]
            (println (ex-message e))
            (as-> (ex-data e) $
-             (printf (if (:cause $) (:cause $) $)))))
+             (println (if (:cause $) (:cause $) $)))))
        (when re-throw?
          (throw e)))
      (catch Exception e

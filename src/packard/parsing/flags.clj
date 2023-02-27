@@ -129,6 +129,14 @@
         index
         (recur (rest argv') (inc index))))))
 
+(defn <-defaults [flags]
+  (reduce-kv
+    (fn [m k v]
+      (if (:default v)
+        (assoc m k (:default v))
+        m))
+    {}
+    flags))
 
 ; -- module interface
 
@@ -152,7 +160,7 @@
   (let [flag-set              (flag-map->set flags)
         flags-indexed-by-flag (index-by-flags flags)]
     (loop [argv'  argv
-           result {}]
+           result (<-defaults flags)]
       (let [flag-index (next-flag-value-index? flag-set argv')]
         (if-not flag-index
           [argv' result]
