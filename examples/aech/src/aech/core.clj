@@ -1,4 +1,4 @@
-(ns httpie.core
+(ns aech.core
   (:gen-class)
   (:require
     [clojure.edn :as edn]
@@ -13,7 +13,8 @@
 
 (defn str->edn [ctx]
   (if-not (get-in ctx [:argv 1])
-    ctx
+    (throw (ex-info "missing body str"
+                    {:cause "POST takes a single argument which is an edn data structure"}))
     (update-in ctx [:argv 1] edn/read-string)))
 
 (defn http-delete [ctx]
@@ -62,6 +63,5 @@
                  #_#_:PUT  http-put}})
 
 (defn -main [& args]
-  (println "ARGS" args)
   (commander/exec commands args))
 

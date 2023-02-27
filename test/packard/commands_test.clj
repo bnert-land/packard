@@ -1,47 +1,107 @@
 (ns packard.commands-test
   (:require
-    [packard.core :as commander]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.string :refer [split]]
+    [clojure.test :refer [deftest is testing]]
+    [packard.core :as commander]))
 
-(deftest sanity
-  (testing "if my setup is wokring"
-    (is (= 1 1))))
+(def ->argv #(split % #" "))
+
+(def run-enter-exit-noop
+  {:run   (fn [_ctx] )
+   :enter (fn [_ctx] )
+   :exit  (fn [_ctx] )})
+
+(defn mock-command
+  [& {:keys [node-start-runners
+             node-stop-runners
+             root-run
+             server-start-runners
+             server-stop-runners]
+      :or   {node-start-runners   run-enter-exit-noop
+             node-stop-runners    run-enter-exit-noop
+             root-run             (fn [_v] )
+             server-start-runners run-enter-exit-noop
+             server-stop-runners  run-enter-exit-noop}}]
+  {:usage "mock"
+   :flags {:basic    ["A" "basic-auth"]
+           :store    ["S" "store" {:as :map}]
+           :verbose? ["V" "verbose" {:as :bool}]}
+   :run   root-run
+   :commands
+   {:node   {:usage "mock node"
+             :flags {:listen  [:l :listen {:as :set}]
+                     :outputs [:o :output {:as :set}]}
+             :commands
+             {:start node-start-runners
+              :stop  node-stop-runners}}
+    :server {:usage "mock server"
+             :flags {:config-path [:c :config-file]}
+             :commands
+             {:start (merge server-start-runners
+                            {:flags {:listen [:l :listen {:as :int}]}})
+              :stop  server-stop-runners}}}})
 
 
-(deftest strip-all-flags
-  ;; In a commander pattern, there isn't really a (reliable) way to
-  ;; distinguish bool flags/sub commands and values, without
-  ;; knowing/accumulating the entire context of the command.
-  ;;
-  ;; Therefore, in order to reliably parse bool, value, and accumulation flags
-  ;; we need to have a cli spec context.
-  (testing "strip flags (bool and non-bool)"
-    (let [cmd0 ["sub" "--bool" "--var" "var" "-B" "--other=thing" "command"]]
-      (is (= (commander/strip-flags cmd0) ["sub" "command"])))))
+(deftest exec-command
+  (testing "if the lib doesn't crash on empty argv"
+    (try
+      (commander/exec (mock-command) [] {:re-throw? true})
+      (is (true? true))
+      (catch Exception e
+        (println e)
+        (is (false? true))))))
 
-#_(deftest simple-flags
-  (testing "simple flag definition for various types"
-    (let [flags ["-h"
-                 "--thing"
-                 #_"--no-other"
-                 "-i"      "image1"
-                 "--image" "image2"
-                 "-i"      "image3,image4"
-                 "-k"      "key:value"
-                 "--kv"    "zhu:li"]
-          cli   {:usage "do the thing zhu li"
-                 :flags {:thing    ["t" "thing" {:as :bool}]
-                         :no-other ["n" "no-other" {:as :bool}]
-                         :images   ["i" "image" {:as     :hash-set
-                                                 :valid? seq}]
-                         :kv       ["k" "kv"    {:as :map}]}
-                 :run    (fn [{:keys [flags positional]}]
-                           (is (= [] positional))
-                           (let [{:keys [thing no-other images kv]} flags]
-                             (is (true? thing))
-                             (is (nil? no-other))
-                             (is (= images ["image1" "image2" "image3" "image4"]))
-                             (is (= kv     {:key "value"
-                                            :zhu "li"}))))}]
-      (commander/exec cli flags))))
+(deftest exec-node-start
+  (testing "if the lib actually works"
+    (let [seen? (atom false)]
+      (commander/exec
+        (mock-command
+          :node-start-runners
+          {:run (fn [{:keys [flags]}]
+                  (swap! seen? not)
+                  (is (= {:store   {:msg "hi"}
+                          :basic   "basic:auth"
+                          :listen  #{"tcp/443" "udp/8081"}
+                          :outputs #{"https://host@9090"
+                                     "unix://var/daemon.fifo"}}
+                         flags)))})
+        (->argv "node -A basic:auth start -l tcp/443 --listen udp/8081 -o https://host@9090 --output unix://var/daemon.fifo -S msg:hi")
+        {:re-throw? true})
+      (is (true? @seen?)))))
+
+(deftest exec-server-start
+  (testing "if the lib actually works"
+    (let [seen? (atom false)]
+      (commander/exec
+        (mock-command
+          :server-start-runners
+          {:run (fn [{:keys [flags]}]
+                  (swap! seen? not)
+                  (is (= {:store   {:msg "hi"}
+                          :basic   "basic:auth"
+                          :listen  443}
+                         flags)))})
+        (->argv "server -A basic:auth start -l 443 -S msg:hi --garbage value")
+        {:re-throw? true})
+      (is (true? @seen?)))))
+
+(deftest exec-node-start-premature-stop
+  (testing "if the (stop) function actually works"
+    (binding [commander/*stop-execution* (atom false)]
+      (let [seen? (atom false)]
+        (commander/exec
+          (mock-command
+            :root-run (fn [_] (commander/stop))
+            :node-start-runners
+            {:run (fn [{:keys [flags]}]
+                    (swap! seen? not)
+                    (is (= {:store   {:msg "hi"}
+                            :basic   "basic:auth"
+                            :listen  #{"tcp/443" "udp/8081"}
+                            :outputs #{"https://host@9090"
+                                       "unix://var/daemon.fifo"}}
+                           flags)))})
+          (->argv "node -A basic:auth start -l tcp/443 --listen udp/8081 -o https://host@9090 --output unix://var/daemon.fifo -S msg:hi")
+          {:re-throw? true})
+        (is (false? @seen?))))))
 

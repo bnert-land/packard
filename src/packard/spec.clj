@@ -19,7 +19,7 @@
 
 (s/def :command/enter fn?)
 
-(s/def :command/exit fn?)
+(s/def :command/leave fn?)
 
 (s/def :command/run fn?)
 
@@ -56,8 +56,10 @@
                                     [:flag/default
                                      :flag/desc
                                      :flag/as]))))
+(s/def :command/args fn?)
 
-(s/def :command/flags (s/map-of keyword? :command/flag))
+(s/def :command/flags
+  (s/map-of keyword? :command/flag))
 
 (s/def :command/usage string?)
 
@@ -67,8 +69,9 @@
   (s/map-of keyword? :cli/command))
 
 (s/def :cli/command
-  (s/keys :opt-un [:command/enter
-                   :command/exit
+  (s/keys :opt-un [:command/args
+                   :command/enter
+                   :command/leave
                    :command/run        ;; main entry
                    :command/flags      ;; flags for command
                    :command/usage      ;; document usage
@@ -77,5 +80,7 @@
 
 (def valid? (partial s/valid? :cli/command))
 (def explain (partial s/explain :cli/command))
+(def explain-data (partial s/explain-data :cli/command))
+(def explain-str (partial s/explain-str :cli/command))
 (def conform (partial s/conform :cli/command))
 
