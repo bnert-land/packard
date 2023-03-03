@@ -1,7 +1,5 @@
 (ns packard.core
   (:require
-    clojure.pprint
-    [clojure.spec.alpha :as s]
     [packard.parsing.flags :refer [->short ->long] :as p.p.flags]
     [packard.spec :as p.spec]))
 
@@ -29,30 +27,36 @@
         (vector? h')
           (recur (reduce str result h') r')))))
 
+(defn- flag->str [v]
+  (cond 
+    (and (:short v) (not (:long v)))
+      (format "  %-24s%s\n" (->short (:short v)) (:desc v))
+    (and (not (:short v)) (:long v))
+      (format "  %-24s%s\n" (->long (:long v)) (:desc v))
+    :else
+     (format "  %-24s%s\n"
+             (str (->short (:short v)) ","
+                  (->long (:long v)))
+             (or (:desc v) ""))))
+
 (defn- cli-spec->help
   [{:keys [desc usage flags commands] :as _conformed-cli} context]
   (render-help-vec
     (cond-> []
       usage
-        (conj (format "usage: %s\n" usage))
+        (conj (format "usage:\n  %s\n\n" usage))
       desc
-        (conj (format "%s\n\n" desc))
+        (conj (format "description:\n  %s\n\n" desc))
+      (:flags context)
+        (conj "inherited flags:\n")
+      (:flags context)
+        (conj (mapv flag->str (vals (:flags context))))
+      (:flags context)
+        (conj "\n")
       flags
         (conj (str "flags:\n"))
       flags
-        (conj (mapv (fn [v]
-                      (cond 
-                        (and (:short v) (not (:long v)))
-                          (format "  %-24s%s\n" (->short (:short v)) (:desc v))
-                        (and (not (:short v)) (:long v))
-                          (format "  %-24s%s\n" (->long (:long v)) (:desc v))
-                        :else
-                         (format "  %-24s%s\n"
-                                 (str (->short (:short v)) ","
-                                      (->long (:long v)))
-                                 (or (:desc v) ""))))
-                    (into (vals flags)
-                          (or (:flags context) []))))
+        (conj (mapv flag->str (vals flags)))
       true
         (conj (str "\ncommands:\n"))
       true
@@ -63,7 +67,7 @@
                               (name k)
                               (or (:desc v) ""))) commands)))))
 
-(defn- exec-for [cli-spec argv context]
+(defn- exec-for [cli-spec argv context seen-flags]
   (if @*stop-execution*
     nil
     (let [{:keys [commands enter leave run]
@@ -79,7 +83,7 @@
         next-command-kw (keyword (first argv'))
         next-command? (get commands (keyword (first argv')))]
       (if (= :help next-command-kw)
-        (println (cli-spec->help cli-spec context))
+        (println (cli-spec->help cli-spec {:flags seen-flags}))
         (do
           (enter context')
           (run context')
@@ -92,7 +96,8 @@
               (throw (ex-info "shouldn't happen" {}))
               (exec-for (with-meta next-command? {:conformed? true})
                         (vec (rest argv'))
-                        context')))
+                        context'
+                        (into seen-flags (:flags conformed)))))
           (leave context'))))))
 
 (defn stop []
@@ -113,7 +118,10 @@
      (let [conformed (maybe-conform cli-spec)]
        (if-not (seq argv)
          (println (cli-spec->help conformed nil))
-         (exec-for conformed argv {:argv argv :flags {} :command {} :state {}})))
+         (exec-for conformed
+                   argv
+                   {:argv argv :flags {} :command {} :state {}}
+                   {})))
      (catch clojure.lang.ExceptionInfo e
        (when-not re-throw?
          (binding [*out* *err*]

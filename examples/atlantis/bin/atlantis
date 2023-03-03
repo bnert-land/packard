@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+java -cp $(git rev-parse --show-toplevel)/examples/atlantis/target/atlantis.jar clojure.main -m atlantis.core $@

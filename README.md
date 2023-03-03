@@ -106,7 +106,9 @@ This will be pushed to clojars once a suitable implementation has been reached
   - [x] seq (set, seq, vec)
   - [x] strings
 - [x] stop execution (via `packard.core/stop`)
-- [ ] auto `help` sub command
+- [x] auto `help` sub command
+  - No auto `-h/--help` flag, given `-h` could be useful for different
+    commands. May revisit to allow, but for now, this should be fine.
 - [ ] auto `tree` sub command
   - [ ] able to print out sub command tree from any sub-command
   - [ ] able to limit depth

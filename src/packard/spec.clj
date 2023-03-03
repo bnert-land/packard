@@ -11,8 +11,13 @@
 (s/def :context/flags
   (s/map-of keyword? any?))
 
+(s/def :context/state any?)
+
 (s/def :command/context
-  (s/keys :req-un [:context/flags :context/argv :context/command :context/state]))
+  (s/keys :req-un [:context/flags
+                   :context/argv
+                   :context/command
+                   :context/state]))
 
 (s/fdef fn-using-ctx
   :args (s/cat :ctx :command/context))
