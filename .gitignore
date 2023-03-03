@@ -1,6 +1,7 @@
 .lsp/
 .cpcache/
 .clj-kondo/.cache
+.nrepl-port
 
 # Build output
 classes/

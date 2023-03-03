@@ -17,9 +17,5 @@
             :main-opts   ["-m" "kaocha.runner"]}
            :outdated
            {:extra-deps {olical/depot {:mvn/version "2.3.0"}}
-            :main-opts  ["-m" "depot.outdated.main" "-a" "outdated"]}
-           :uberjar
-           {:replace-deps {uberdeps/uberdeps {:mvn/version "1.2.0"}}
-            :replace-paths []
-            :main-opts     ["-m" "uberdeps.uberjar"]}}}
+            :main-opts  ["-m" "depot.outdated.main" "-a" "outdated"]}}}
 

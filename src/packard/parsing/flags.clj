@@ -159,20 +159,28 @@
   [{:keys [flags] :as _verbose-cli-command} argv]
   (let [flag-set              (flag-map->set flags)
         flags-indexed-by-flag (index-by-flags flags)]
-    (loop [argv'  argv
-           result (<-defaults flags)]
-      (let [flag-index (next-flag-value-index? flag-set argv')]
-        (if-not flag-index
-          [argv' result]
-          (let [flag (nth argv' flag-index)]
-            (if (eq-flag? flag)
-              (recur (concat (parse-eq-flag flag) (rest argv'))
-                     result)
-              (let [flag-opts (get flags-indexed-by-flag flag)]
-                (if (= :bool (:as flag-opts))
-                  (recur (drop-index argv' flag-index)
-                         (assoc result (:name flag-opts)
-                                       (not (get flag-opts :default false))))
-                  (recur (drop-index argv' flag-index (inc flag-index))
-                         (assoc-flag result (nth argv' (inc flag-index)) flag-opts)))))))))))
+    (try
+      (loop [argv'  argv
+             result (<-defaults flags)]
+        (let [flag-index (next-flag-value-index? flag-set argv')]
+          (if-not flag-index
+            [argv' result]
+            (let [flag (nth argv' flag-index)]
+              (if (eq-flag? flag)
+                (recur (concat (parse-eq-flag flag) (rest argv'))
+                       result)
+                (let [flag-opts (get flags-indexed-by-flag flag)]
+                  (if (= :bool (:as flag-opts))
+                    (recur (drop-index argv' flag-index)
+                           (assoc result (:name flag-opts)
+                                         (not (get flag-opts :default false))))
+                    (recur (drop-index argv' flag-index (inc flag-index))
+                           (assoc-flag result
+                                       (nth argv'
+                                            (inc flag-index))
+                                       flag-opts)))))))))
+      (catch java.lang.IndexOutOfBoundsException _e
+        ;; We should force a "help" at this point, given they may
+        ;; be missing an argument for a flag
+        [["help"] flags]))))
 

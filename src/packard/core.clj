@@ -1,7 +1,8 @@
 (ns packard.core
   (:require
+    clojure.pprint
     [clojure.spec.alpha :as s]
-    [packard.parsing.flags :as p.p.flags]
+    [packard.parsing.flags :refer [->short ->long] :as p.p.flags]
     [packard.spec :as p.spec]))
 
 (def ^:dynamic *stop-execution* (atom false))
@@ -16,6 +17,52 @@
       (p.p.flags/compile-flags-specs (p.spec/conform cli-spec))
       {:conformed? true})))
 
+(defn- render-help-vec [help-vec]
+  (loop [result    ""
+         [h' & r'] help-vec]
+    (if-not h'
+      result
+      (cond
+        (string? h')
+          (recur (str result h')
+                 r')
+        (vector? h')
+          (recur (reduce str result h') r')))))
+
+(defn- cli-spec->help
+  [{:keys [desc usage flags commands] :as _conformed-cli} context]
+  (render-help-vec
+    (cond-> []
+      usage
+        (conj (format "usage: %s\n" usage))
+      desc
+        (conj (format "%s\n\n" desc))
+      flags
+        (conj (str "flags:\n"))
+      flags
+        (conj (mapv (fn [v]
+                      (cond 
+                        (and (:short v) (not (:long v)))
+                          (format "  %-24s%s\n" (->short (:short v)) (:desc v))
+                        (and (not (:short v)) (:long v))
+                          (format "  %-24s%s\n" (->long (:long v)) (:desc v))
+                        :else
+                         (format "  %-24s%s\n"
+                                 (str (->short (:short v)) ","
+                                      (->long (:long v)))
+                                 (or (:desc v) ""))))
+                    (into (vals flags)
+                          (or (:flags context) []))))
+      true
+        (conj (str "\ncommands:\n"))
+      true
+        (conj [(format "  %-24s%s\n" "help" "this command")])
+      commands
+        (conj (mapv (fn [[k v]]
+                      (format "  %-24s%s\n"
+                              (name k)
+                              (or (:desc v) ""))) commands)))))
+
 (defn- exec-for [cli-spec argv context]
   (if @*stop-execution*
     nil
@@ -26,23 +73,27 @@
          :as   conformed} (maybe-conform cli-spec)
         [argv' flags']    (p.p.flags/gather conformed argv)
         context'      (-> context
-                       (assoc :argv argv')
-                       (update :flags merge flags')
-                       (assoc :command conformed))
+                          (assoc :argv argv')
+                          (update :flags merge flags')
+                          (assoc :command conformed))
+        next-command-kw (keyword (first argv'))
         next-command? (get commands (keyword (first argv')))]
-      (enter context')
-      (run context')
-      ;; should this throw?
-      (when (and (seq commands) (not next-command?))
-        (throw (ex-info "unrecognized command"
-                        {:cause (format "'%s' is not a command" (first argv'))})))
-      (when next-command?
-        (if-not (conformed? conformed)
-          (throw (ex-info "shouldn't happen" {}))
-          (exec-for (with-meta next-command? {:conformed? true})
-                    (vec (rest argv'))
-                    context')))
-      (leave context'))))
+      (if (= :help next-command-kw)
+        (println (cli-spec->help cli-spec context))
+        (do
+          (enter context')
+          (run context')
+          ;; should this throw?
+          (when (and (seq commands) (not next-command?))
+            (throw (ex-info "unrecognized command"
+                            {:cause (format "'%s' is not a command" (first argv'))})))
+          (when next-command?
+            (if-not (conformed? conformed)
+              (throw (ex-info "shouldn't happen" {}))
+              (exec-for (with-meta next-command? {:conformed? true})
+                        (vec (rest argv'))
+                        context')))
+          (leave context'))))))
 
 (defn stop []
   (reset! *stop-execution* true))
@@ -59,9 +110,10 @@
      (when-not (p.spec/valid? cli-spec)
        (throw (ex-info "invalid cli"
                        {:cause (p.spec/explain-str cli-spec)})))
-     (if-not (seq argv)
-       nil ; todo: add help
-       (exec-for cli-spec argv {:argv argv :flags {} :command {} :state {}}))
+     (let [conformed (maybe-conform cli-spec)]
+       (if-not (seq argv)
+         (println (cli-spec->help conformed nil))
+         (exec-for conformed argv {:argv argv :flags {} :command {} :state {}})))
      (catch clojure.lang.ExceptionInfo e
        (when-not re-throw?
          (binding [*out* *err*]
