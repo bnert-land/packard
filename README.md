@@ -3,16 +3,21 @@
     src="https://y.yarn.co/5ecac47d-b771-463f-8c80-82fdc0e7c243_text.gif"
     alt="commander..."
   >
+ <br/>
+ declarative cli's via the "commander" idiom
 </p>
 
-simple, declarative cli's
 
 ## Overview
-`packard` aims to be a simple approach to building command line applications
+
+`packard` aims to be a composable approach to building command line applications
 with Clojure.
 
 Targeting ClojureScript is not supported at this time, in order to keep
 the library simple (and frankly, I hate writing `cljc` files).
+
+This library takes inspiration from [cobra](https://github.com/spf13/cobra), while
+not being strict around POSIX compatability.
 
 
 ## Example
@@ -131,23 +136,24 @@ almost all instances.
 
 
 ## Documentation
+
 Will get a docs site up once library has reached a stable point w/ base features.
 
 
 ## Design Outline
+
 `packard` cli's are progressively parsed via a spec on recursively nested maps.
 Meaning on each invocation, a cli takes in the argv provided and builds up a context
 for sub commands, parsing flags along the way.
 
-This approach has some distinct advantages, namely that we can model a command
-line a tree, which simplifies implementation tremendously.
+The primary advantage of progressively parsing commands are model as a tree, with each
+node in the tree being a homogenous structure.
 
 It also has a side effect that predictable structure is enforced for the command line.
 The predictable structure is that a flag for a command cannot be put in the context
 of a parent command. Which also means that flags can be repeated in different
-branches of the tree, allowing for more flexible definition. It also allows for
-cli's to be discoverable, and users won't need to remember an entire corpus of
-flags, only the flags which are associated within a certain sub command branch.
+branches of the tree, allowing for flexible definition. The method also accounts for
+discoverablility. The entire corpus of flags and/or commands need not be memorized, but is at hand.
 
 The downside of the listed approach can also be viewed as a downside. However,
 I don't think it is.
